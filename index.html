@@ -2,207 +2,174 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>iShip Print Pro - Smooth Sharp</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravity Top - True Align</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
-        :root { --primary-color: #ff6b00; }
-        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 20px; text-align: center; margin: 0; }
-        .card { background: white; max-width: 500px; margin: auto; padding: 25px; border-radius: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        .app-logo { width: 60px; height: 60px; margin-bottom: 10px; border-radius: 12px; }
-        .upload-area { border: 3px dashed var(--primary-color); padding: 30px; border-radius: 15px; cursor: pointer; background: #fff9f5; margin-bottom: 20px; }
-        
-        #pdfWrapper { 
-            position: relative; display: none; margin: 15px 0; border: 2px solid #ccc; 
-            line-height: 0; touch-action: none; user-select: none; overflow: hidden;
-        }
-        #displayCanvas { width: 100%; height: auto; }
-        #selectionBox { 
-            position: absolute; border: 2px solid #ff0000; background: rgba(255, 0, 0, 0.1); 
-            display: none; pointer-events: none; box-sizing: border-box;
-        }
-        
-        .controls { text-align: left; background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
-        button { padding: 16px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
-        .btn-process { background: var(--primary-color); color: white; }
-        .btn-share { background: #28a745; color: white; display: none; }
-        #previewCanvas { width: 100%; border: 1px solid #333; margin-top: 20px; display: none; }
+        body { font-family: sans-serif; background: #111; color: white; padding: 20px; text-align: center; }
+        .card { background: #222; padding: 25px; border-radius: 20px; max-width: 450px; margin: auto; border: 1px solid #444; }
+        select { width: 100%; padding: 15px; border-radius: 12px; background: #333; color: white; border: 1px solid #555; margin: 15px 0; }
+        .btn-upload { background: #007aff; color: white; padding: 18px; border-radius: 12px; cursor: pointer; display: block; font-weight: bold; }
+        #pdf-upload { display: none; }
+        #status { margin: 15px 0; color: #00ea8c; font-weight: bold; }
+        canvas { max-width: 100%; border: 1px solid #444; margin-top: 15px; display: none; background: white; }
+        .btn-share { background: #ff3b30; color: white; border: none; width: 100%; padding: 20px; border-radius: 15px; font-size: 20px; font-weight: bold; margin-top: 20px; cursor: pointer; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <img src="https://cdn-icons-png.flaticon.com/512/446/446991.png" alt="Logo" class="app-logo">
-    <h2 style="margin-top:0; color: var(--primary-color);">iShip Print Fix 🚀</h2>
-    <p id="status" style="font-size: 13px;">คืนค่าความคมแบบเนียนตา (รองรับ PDF และ รูปภาพ)</p>
+    <h3>รุ่นชิดขอบบน (True Align)</h3>
+    <p style="font-size: 12px; color: #aaa;">ใช้การตัดแบบเดิมที่แม่นยำ + บังคับเนื้อหาชนขอบบนสุด</p>
+    
+    <select id="split-num">
+        <option value="2">แบ่ง 2 ท่อน</option>
+        <option value="3" selected>แบ่ง 3 ท่อน</option>
+        <option value="4">แบ่ง 4 ท่อน</option>
+    </select>
 
-    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-        <input type="file" id="fileInput" accept="application/pdf, image/*" style="display:none">
-        <strong>📂 เลือกไฟล์ PDF หรือ รูปภาพ</strong>
-    </div>
-
-    <div id="pdfWrapper">
-        <canvas id="displayCanvas"></canvas>
-        <div id="selectionBox"></div>
-    </div>
-
-    <div class="controls">
-        <label style="font-size:12px; font-weight: bold;">แบ่งเป็นกี่ส่วน (กรณีใบปะหน้ายาว):</label>
-        <input type="number" id="splitCount" value="1" min="1" max="5" style="width:100%; padding:10px; box-sizing:border-box; margin-top:5px;">
-    </div>
-
-    <button class="btn-process" onclick="processSmoothSharp()">ดำเนินการ (ความละเอียดสูง)</button>
-    <button id="shareBtn" class="btn-share" onclick="shareToPrinter()">บันทึกรูปภาพ</button>
-
-    <canvas id="previewCanvas"></canvas>
+    <label for="pdf-upload" class="btn-upload">📂 เลือกไฟล์ PDF</label>
+    <input type="file" id="pdf-upload" accept="application/pdf" />
+    <div id="status">รอไฟล์...</div>
 </div>
 
+<button id="share-btn" class="btn-share">📤 ส่งรูปไปปริ้น</button>
+<canvas id="canvas-preview"></canvas>
+
 <script>
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-    
-    let currentSource = null; // เก็บภาพต้นฉบับ (Image หรือ Canvas)
-    let displayCanvas = document.getElementById('displayCanvas');
-    let selectionBox = document.getElementById('selectionBox');
-    let pdfWrapper = document.getElementById('pdfWrapper');
-    let finalBlob = null;
-    let isDrawing = false, startX, startY;
 
-    function getMousePos(e) {
-        const rect = displayCanvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const scaleX = displayCanvas.width / rect.width;
-        const scaleY = displayCanvas.height / rect.height;
-        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
-    }
+    const pdfInput = document.getElementById('pdf-upload');
+    const status = document.getElementById('status');
+    const shareBtn = document.getElementById('share-btn');
+    const previewCanvas = document.getElementById('canvas-preview');
+    const splitSelect = document.getElementById('split-num');
 
-    const startSelection = (e) => {
-        isDrawing = true;
-        const pos = getMousePos(e);
-        startX = pos.x; startY = pos.y;
-        selectionBox.style.display = "block";
-    };
-
-    const moveSelection = (e) => {
-        if (!isDrawing) return;
-        const currentPos = getMousePos(e);
-        const rect = displayCanvas.getBoundingClientRect();
-        const sX = rect.width / displayCanvas.width;
-        const sY = rect.height / displayCanvas.height;
-        selectionBox.style.left = `${Math.min(startX, currentPos.x) * sX}px`;
-        selectionBox.style.top = `${Math.min(startY, currentPos.y) * sY}px`;
-        selectionBox.style.width = `${Math.abs(startX - currentPos.x) * sX}px`;
-        selectionBox.style.height = `${Math.abs(startY - currentPos.y) * sY}px`;
-    };
-
-    pdfWrapper.addEventListener('mousedown', startSelection);
-    window.addEventListener('mousemove', moveSelection);
-    window.addEventListener('mouseup', () => isDrawing = false);
-    pdfWrapper.addEventListener('touchstart', (e) => { startSelection(e); e.preventDefault(); }, {passive: false});
-    window.addEventListener('touchmove', (e) => { moveSelection(e); }, {passive: false});
-    window.addEventListener('touchend', () => isDrawing = false);
-
-    document.getElementById('fileInput').onchange = async function() {
-        const file = this.files[0];
+    pdfInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
         if (!file) return;
 
-        if (file.type === "application/pdf") {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-            const page = await pdf.getPage(1);
-            const viewport = page.getViewport({ scale: 1.5 });
-            displayCanvas.width = viewport.width;
-            displayCanvas.height = viewport.height;
-            await page.render({ canvasContext: displayCanvas.getContext('2d'), viewport: viewport }).promise;
-            currentSource = page; // เก็บ page ไว้ประมวลผล HD ทีหลัง
-        } else if (file.type.startsWith("image/")) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    displayCanvas.width = img.width;
-                    displayCanvas.height = img.height;
-                    displayCanvas.getContext('2d').drawImage(img, 0, 0);
-                    currentSource = img; // เก็บภาพไว้ประมวลผล
+        const numParts = parseInt(splitSelect.value);
+        status.innerText = `📡 กำลังจัดตำแหน่งชิดขอบบน...`;
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let finalParts = [];
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const res = await processGravityTop(page, numParts);
+            if (res) finalParts.push(...res);
+        }
+        renderFinal(finalParts);
+    });
+
+    async function processGravityTop(page, numParts) {
+        const scale = 5.0;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+        const rect = getContentRect(ctx, canvas.width, canvas.height);
+        if (!rect) return null;
+
+        const topY = Math.max(0, rect.y - 50);
+        const bottomY = Math.min(canvas.height, rect.y + rect.h + 20);
+        const contentH = bottomY - topY;
+
+        let splitPoints = [topY];
+        for (let j = 1; j < numParts; j++) {
+            let targetY = topY + Math.floor((contentH / numParts) * j);
+            splitPoints.push(findSafeGap(ctx, rect.x, targetY, rect.w));
+        }
+        splitPoints.push(bottomY);
+
+        let parts = [];
+        for (let k = 0; k < splitPoints.length - 1; k++) {
+            parts.push(drawGravityPart(canvas, rect.x, splitPoints[k], rect.w, splitPoints[k+1] - splitPoints[k]));
+        }
+        return parts;
+    }
+
+    function findSafeGap(ctx, x, targetY, w) {
+        const range = 150; // รักษาค่าเดิมไว้เพื่อความแม่นยำ
+        let bestY = targetY;
+        let maxBlank = 0;
+        for (let y = targetY - range; y < targetY + range; y++) {
+            let count = 0;
+            while (y + count < targetY + range && isClean(ctx, x, y + count, w)) count++;
+            if (count > maxBlank) { maxBlank = count; bestY = y + Math.floor(count / 2); }
+        }
+        return bestY;
+    }
+
+    function isClean(ctx, x, y, w) {
+        if (y < 0 || y >= ctx.canvas.height) return true;
+        const data = ctx.getImageData(x, y, w, 1).data;
+        let dark = 0;
+        for (let i = 0; i < data.length; i += 20) if (data[i] < 225) dark++;
+        return (dark / (data.length / 4)) < 0.01;
+    }
+
+    function getContentRect(ctx, w, h) {
+        const data = ctx.getImageData(0, 0, w, h).data;
+        let minY = h, maxY = 0, minX = w, maxX = 0, found = false;
+        for (let y = 0; y < h; y += 50) {
+            for (let x = 0; x < w; x += 50) {
+                if (data[(y * w + x) * 4] < 200) {
+                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+                    found = true;
                 }
-                img.src = e.target.result;
             }
-            reader.readAsDataURL(file);
         }
+        return found ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : null;
+    }
+
+    // ฟังก์ชันที่ปรับปรุงใหม่ให้ชิดบนสุดจริง
+    function drawGravityPart(source, x, y, w, h) {
+        const c = document.createElement('canvas');
+        const ctx = c.getContext('2d');
+        const paddingBottom = 100; // พื้นที่ขาวด้านท้ายสำหรับแปะทับ
         
-        pdfWrapper.style.display = "inline-block";
-        selectionBox.style.display = "none";
+        c.width = h + paddingBottom; 
+        c.height = w;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, c.width, c.height);
+        
+        ctx.save();
+        // หมุนภาพ 90 องศาให้เป็นแนวนอน
+        ctx.translate(0, w); 
+        ctx.rotate(-Math.PI / 2);
+        
+        // วาดให้ชิดพิกัด 0,0 ของแผ่นใหม่ทันที (คือบนสุดหลังหมุน)
+        // พื้นที่ขาว paddingBottom จะถูกผลักไปอยู่ด้านล่างโดยอัตโนมัติ
+        ctx.drawImage(source, x, y, w, h, 0, 0, w, h);
+        ctx.restore();
+        return c;
+    }
+
+    function renderFinal(parts) {
+        const totalH = parts.reduce((s, p) => s + p.height + 20, 0);
+        const maxW = Math.max(...parts.map(p => p.width));
+        previewCanvas.width = maxW; previewCanvas.height = totalH;
+        const ctx = previewCanvas.getContext('2d');
+        ctx.fillStyle = "white"; ctx.fillRect(0, 0, maxW, totalH);
+        let curY = 0;
+        parts.forEach(p => {
+            ctx.drawImage(p, 0, curY);
+            curY += p.height + 20;
+        });
+        previewCanvas.style.display = 'block';
+        shareBtn.style.display = 'block';
+        status.innerText = `✅ ตัดแม่นยำและชิดขอบบนแล้ว!`;
+    }
+
+    shareBtn.onclick = () => {
+        previewCanvas.toBlob(b => navigator.share({ files: [new File([b], 'TrueAlign_Label.png', {type:'image/png'})] }));
     };
-
-    async function processSmoothSharp() {
-        if (!currentSource || selectionBox.style.display === 'none') return;
-        document.getElementById('status').innerText = "กำลังประมวลผลความละเอียดสูง...";
-
-        const rect = displayCanvas.getBoundingClientRect();
-        const boxLeft = parseFloat(selectionBox.style.left) / rect.width;
-        const boxTop = parseFloat(selectionBox.style.top) / rect.height;
-        const boxW = parseFloat(selectionBox.style.width) / rect.width;
-        const boxH = parseFloat(selectionBox.style.height) / rect.height;
-
-        let hdCanvas = document.createElement('canvas');
-        
-        if (currentSource.getViewport) { // กรณีเป็น PDF
-            const hdScale = 8.0;
-            const hdViewport = currentSource.getViewport({ scale: hdScale });
-            hdCanvas.width = hdViewport.width;
-            hdCanvas.height = hdViewport.height;
-            await currentSource.render({ canvasContext: hdCanvas.getContext('2d'), viewport: hdViewport }).promise;
-        } else { // กรณีเป็นรูปภาพ
-            hdCanvas.width = currentSource.width;
-            hdCanvas.height = currentSource.height;
-            hdCanvas.getContext('2d').drawImage(currentSource, 0, 0);
-        }
-
-        const cropX = hdCanvas.width * boxLeft;
-        const cropY = hdCanvas.height * boxTop;
-        const cropW = hdCanvas.width * boxW;
-        const cropH = hdCanvas.height * boxH;
-
-        const splitCount = parseInt(document.getElementById('splitCount').value) || 1;
-        const partH = cropH / splitCount;
-
-        const previewCanvas = document.getElementById('previewCanvas');
-        const pCtx = previewCanvas.getContext('2d');
-
-        previewCanvas.width = partH; 
-        previewCanvas.height = cropW * splitCount;
-
-        pCtx.filter = 'contrast(1.4) grayscale(1)';
-
-        for (let i = 0; i < splitCount; i++) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = partH; tempCanvas.height = cropW;
-            const tCtx = tempCanvas.getContext('2d');
-            tCtx.translate(tempCanvas.width/2, tempCanvas.height/2);
-            tCtx.rotate(-90 * Math.PI / 180);
-            tCtx.drawImage(hdCanvas, cropX, cropY + (i * partH), cropW, partH, -cropW/2, -partH/2, cropW, partH);
-            pCtx.drawImage(tempCanvas, 0, i * cropW);
-        }
-
-        pCtx.filter = 'none';
-        previewCanvas.style.display = "inline-block";
-        document.getElementById('shareBtn').style.display = "block";
-        document.getElementById('status').innerText = "✅ เสร็จแล้ว! คมชัดแบบ High-Res";
-        previewCanvas.toBlob(blob => { finalBlob = blob; }, 'image/png');
-    }
-
-    async function shareToPrinter() {
-        if (!finalBlob) return;
-        const file = new File([finalBlob], "label.png", { type: "image/png" });
-        if (navigator.share) {
-            navigator.share({ files: [file], title: 'iShip Print' });
-        } else {
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(finalBlob);
-            link.download = "label.png";
-            link.click();
-        }
-    }
 </script>
 </body>
 </html>
