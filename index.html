@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Top - True Align</title>
+    <title>Label Splitter - Pro Edition</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #111; color: white; padding: 20px; text-align: center; }
@@ -19,8 +19,8 @@
 <body>
 
 <div class="card">
-    <h3>รุ่นชิดขอบบน (True Align)</h3>
-    <p style="font-size: 12px; color: #aaa;">ใช้การตัดแบบเดิมที่แม่นยำ + บังคับเนื้อหาชนขอบบนสุด</p>
+    <h3>รุ่นจัดการรอยต่อแม่นยำ</h3>
+    <p style="font-size: 12px; color: #aaa;">เส้นเดี่ยวระหว่างท่อน + ขยายขอบหัวท้าย + เว้นระยะระหว่างใบ</p>
     
     <select id="split-num">
         <option value="2">แบ่ง 2 ท่อน</option>
@@ -49,22 +49,22 @@
     pdfInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const numParts = parseInt(splitSelect.value);
-        status.innerText = `📡 กำลังจัดตำแหน่งชิดขอบบน...`;
+        status.innerText = `📡 กำลังจัดระเบียบรอยต่อ...`;
+        
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        let finalParts = [];
+        let allPagesContent = [];
 
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
-            const res = await processGravityTop(page, numParts);
-            if (res) finalParts.push(...res);
+            const parts = await processPageParts(page, numParts);
+            if (parts) allPagesContent.push(parts);
         }
-        renderFinal(finalParts);
+        renderFinalCombined(allPagesContent);
     });
 
-    async function processGravityTop(page, numParts) {
+    async function processPageParts(page, numParts) {
         const scale = 5.0;
         const viewport = page.getViewport({ scale });
         const canvas = document.createElement('canvas');
@@ -88,13 +88,81 @@
 
         let parts = [];
         for (let k = 0; k < splitPoints.length - 1; k++) {
-            parts.push(drawGravityPart(canvas, rect.x, splitPoints[k], rect.w, splitPoints[k+1] - splitPoints[k]));
+            const partCanvas = document.createElement('canvas');
+            const pCtx = partCanvas.getContext('2d');
+            const h = splitPoints[k+1] - splitPoints[k];
+            const w = rect.w;
+            const sidePadding = 10;
+
+            partCanvas.width = h; 
+            partCanvas.height = w + (sidePadding * 2);
+            
+            pCtx.fillStyle = "white";
+            pCtx.fillRect(0, 0, partCanvas.width, partCanvas.height);
+            pCtx.save();
+            pCtx.translate(0, w + sidePadding); 
+            pCtx.rotate(-Math.PI / 2);
+            pCtx.drawImage(canvas, rect.x, splitPoints[k], w, h, 0, 0, w, h);
+            pCtx.restore();
+
+            parts.push(partCanvas);
         }
         return parts;
     }
 
+    function renderFinalCombined(allPagesContent) {
+        const safeZone = 50; // พื้นที่ขาวหัว-ท้าย
+        const gapBetweenPages = 60; // ระยะเว้นระหว่างใบปะหน้าใบที่ 1 และ 2
+        
+        let totalHeight = 0;
+        allPagesContent.forEach((pageParts, pIndex) => {
+            totalHeight += safeZone; // ขอบขาวบนของแต่ละใบ
+            pageParts.forEach(p => totalHeight += p.height);
+            totalHeight += safeZone; // ขอบขาวล่างของแต่ละใบ
+            if (pIndex < allPagesContent.length - 1) totalHeight += gapBetweenPages;
+        });
+
+        const maxW = Math.max(...allPagesContent.flat().map(p => p.width));
+        previewCanvas.width = maxW; 
+        previewCanvas.height = totalHeight;
+        const ctx = previewCanvas.getContext('2d');
+        ctx.fillStyle = "white"; 
+        ctx.fillRect(0, 0, maxW, totalHeight);
+        
+        let curY = 0;
+        allPagesContent.forEach((pageParts, pIndex) => {
+            curY += safeZone; // เริ่มใบใหม่ด้วยพื้นที่ขาว
+            const startOfPageY = curY;
+
+            pageParts.forEach((part, index) => {
+                ctx.drawImage(part, 0, curY);
+                
+                // วาดเส้นประ "ด้านข้าง" ยาวตลอดท่อน
+                ctx.setLineDash([15, 12]);
+                ctx.strokeStyle = "#444";
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(0, curY + 2); ctx.lineTo(part.width, curY + 2); // เส้นบนท่อน
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, curY + part.height - 2); ctx.lineTo(part.width, curY + part.height - 2); // เส้นล่างท่อน
+                ctx.stroke();
+
+                curY += part.height;
+            });
+
+            curY += safeZone; // จบใบด้วยพื้นที่ขาว
+            if (pIndex < allPagesContent.length - 1) curY += gapBetweenPages; // เว้นระยะถ้ามีหน้าถัดไป
+        });
+
+        previewCanvas.style.display = 'block';
+        shareBtn.style.display = 'block';
+        status.innerText = `✅ จัดการรอยต่อและระยะห่างหน้า PDF เรียบร้อยแล้ว`;
+    }
+
+    // --- ฟังก์ชันเสริมคงเดิม ---
     function findSafeGap(ctx, x, targetY, w) {
-        const range = 150; // รักษาค่าเดิมไว้เพื่อความแม่นยำ
+        const range = 150;
         let bestY = targetY;
         let maxBlank = 0;
         for (let y = targetY - range; y < targetY + range; y++) {
@@ -128,47 +196,8 @@
         return found ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : null;
     }
 
-    // ฟังก์ชันที่ปรับปรุงใหม่ให้ชิดบนสุดจริง
-    function drawGravityPart(source, x, y, w, h) {
-        const c = document.createElement('canvas');
-        const ctx = c.getContext('2d');
-        const paddingBottom = 100; // พื้นที่ขาวด้านท้ายสำหรับแปะทับ
-        
-        c.width = h + paddingBottom; 
-        c.height = w;
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, c.width, c.height);
-        
-        ctx.save();
-        // หมุนภาพ 90 องศาให้เป็นแนวนอน
-        ctx.translate(0, w); 
-        ctx.rotate(-Math.PI / 2);
-        
-        // วาดให้ชิดพิกัด 0,0 ของแผ่นใหม่ทันที (คือบนสุดหลังหมุน)
-        // พื้นที่ขาว paddingBottom จะถูกผลักไปอยู่ด้านล่างโดยอัตโนมัติ
-        ctx.drawImage(source, x, y, w, h, 0, 0, w, h);
-        ctx.restore();
-        return c;
-    }
-
-    function renderFinal(parts) {
-        const totalH = parts.reduce((s, p) => s + p.height + 20, 0);
-        const maxW = Math.max(...parts.map(p => p.width));
-        previewCanvas.width = maxW; previewCanvas.height = totalH;
-        const ctx = previewCanvas.getContext('2d');
-        ctx.fillStyle = "white"; ctx.fillRect(0, 0, maxW, totalH);
-        let curY = 0;
-        parts.forEach(p => {
-            ctx.drawImage(p, 0, curY);
-            curY += p.height + 20;
-        });
-        previewCanvas.style.display = 'block';
-        shareBtn.style.display = 'block';
-        status.innerText = `✅ ตัดแม่นยำและชิดขอบบนแล้ว!`;
-    }
-
     shareBtn.onclick = () => {
-        previewCanvas.toBlob(b => navigator.share({ files: [new File([b], 'TrueAlign_Label.png', {type:'image/png'})] }));
+        previewCanvas.toBlob(b => navigator.share({ files: [new File([b], 'Label_Perfect_Split.png', {type:'image/png'})] }));
     };
 </script>
 </body>
