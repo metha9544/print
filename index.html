@@ -3,29 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Label Splitter - Pro Edition</title>
+    <title>Label Splitter - Center Balanced</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #111; color: white; padding: 20px; text-align: center; }
         .card { background: #222; padding: 25px; border-radius: 20px; max-width: 450px; margin: auto; border: 1px solid #444; }
-        select { width: 100%; padding: 15px; border-radius: 12px; background: #333; color: white; border: 1px solid #555; margin: 15px 0; }
-        .btn-upload { background: #007aff; color: white; padding: 18px; border-radius: 12px; cursor: pointer; display: block; font-weight: bold; }
+        select { width: 100%; padding: 15px; border-radius: 12px; background: #333; color: white; border: 1px solid #555; margin: 15px 0; font-size: 16px; }
+        .btn-upload { background: #007aff; color: white; padding: 18px; border-radius: 12px; cursor: pointer; display: block; font-weight: bold; margin-top: 10px; }
         #pdf-upload { display: none; }
-        #status { margin: 15px 0; color: #00ea8c; font-weight: bold; }
-        canvas { max-width: 100%; border: 1px solid #444; margin-top: 15px; display: none; background: white; }
+        #status { margin: 15px 0; color: #00ea8c; font-weight: bold; min-height: 20px; }
+        canvas { max-width: 100%; border: 1px solid #444; margin-top: 15px; display: none; background: white; border-radius: 8px; }
         .btn-share { background: #ff3b30; color: white; border: none; width: 100%; padding: 20px; border-radius: 15px; font-size: 20px; font-weight: bold; margin-top: 20px; cursor: pointer; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3>รุ่นจัดการรอยต่อแม่นยำ</h3>
-    <p style="font-size: 12px; color: #aaa;">เส้นเดี่ยวระหว่างท่อน + ขยายขอบหัวท้าย + เว้นระยะระหว่างใบ</p>
+    <h2>Label Splitter (สมดุลกลาง)</h2>
+    <p style="font-size: 13px; color: #aaa;">เน้นตัดกึ่งกลางเพื่อรักษาขนาดตัวอักษรให้ชัดเจนที่สุด</p>
     
     <select id="split-num">
-        <option value="2">แบ่ง 2 ท่อน</option>
-        <option value="3" selected>แบ่ง 3 ท่อน</option>
-        <option value="4">แบ่ง 4 ท่อน</option>
+        <option value="2" selected>แบ่ง 2 ท่อน (แนะนำสำหรับไปรษณีย์)</option>
+        <option value="3">แบ่ง 3 ท่อน</option>
     </select>
 
     <label for="pdf-upload" class="btn-upload">📂 เลือกไฟล์ PDF</label>
@@ -50,7 +49,7 @@
         const file = e.target.files[0];
         if (!file) return;
         const numParts = parseInt(splitSelect.value);
-        status.innerText = `📡 กำลังจัดระเบียบรอยต่อ...`;
+        status.innerText = `⚖️ กำลังคำนวณจุดตัดที่สมดุล...`;
         
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -65,7 +64,7 @@
     });
 
     async function processPageParts(page, numParts) {
-        const scale = 5.0;
+        const scale = 4.0;
         const viewport = page.getViewport({ scale });
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -75,14 +74,15 @@
         const rect = getContentRect(ctx, canvas.width, canvas.height);
         if (!rect) return null;
 
-        const topY = Math.max(0, rect.y - 50);
-        const bottomY = Math.min(canvas.height, rect.y + rect.h + 20);
+        const topY = rect.y;
+        const bottomY = rect.y + rect.h;
         const contentH = bottomY - topY;
 
         let splitPoints = [topY];
         for (let j = 1; j < numParts; j++) {
             let targetY = topY + Math.floor((contentH / numParts) * j);
-            splitPoints.push(findSafeGap(ctx, rect.x, targetY, rect.w));
+            // ปรับปรุง: ส่งค่า targetY เข้าไปเพื่อหาจุดที่ใกล้เคียงที่สุด
+            splitPoints.push(findBalancedGap(ctx, rect.x, targetY, rect.w));
         }
         splitPoints.push(bottomY);
 
@@ -92,11 +92,10 @@
             const pCtx = partCanvas.getContext('2d');
             const h = splitPoints[k+1] - splitPoints[k];
             const w = rect.w;
-            const sidePadding = 10;
+            const sidePadding = 15;
 
             partCanvas.width = h; 
             partCanvas.height = w + (sidePadding * 2);
-            
             pCtx.fillStyle = "white";
             pCtx.fillRect(0, 0, partCanvas.width, partCanvas.height);
             pCtx.save();
@@ -104,22 +103,75 @@
             pCtx.rotate(-Math.PI / 2);
             pCtx.drawImage(canvas, rect.x, splitPoints[k], w, h, 0, 0, w, h);
             pCtx.restore();
-
             parts.push(partCanvas);
         }
         return parts;
     }
 
-    function renderFinalCombined(allPagesContent) {
-        const safeZone = 50; // พื้นที่ขาวหัว-ท้าย
-        const gapBetweenPages = 60; // ระยะเว้นระหว่างใบปะหน้าใบที่ 1 และ 2
+    // Logic ใหม่: ค้นหาจุดตัดที่ "ใกล้เคียงค่ากึ่งกลาง" มากที่สุด
+    function findBalancedGap(ctx, x, targetY, w) {
+        const searchLimit = 300; // ขอบเขตการค้นหาขึ้น-ลงจากกึ่งกลาง
+        let bestY = targetY;
+        let minPenalty = Infinity;
+
+        for (let y = targetY - searchLimit; y < targetY + searchLimit; y++) {
+            const density = getLineDensity(ctx, x, y, w);
+            
+            // Penalty คือคะแนนความแย่: ยิ่งไกลจากเป้าหมาย และยิ่งมีความหนาแน่น ยิ่งคะแนนสูง (แย่)
+            // ถ้า density ต่ำ (ที่ว่าง) penalty จะน้อย
+            if (density < 0.02) { 
+                let distanceFromTarget = Math.abs(y - targetY);
+                let penalty = distanceFromTarget; 
+
+                if (penalty < minPenalty) {
+                    minPenalty = penalty;
+                    bestY = y;
+                }
+            }
+        }
         
+        // ถ้าไม่เจอที่ว่างเลยในระยะ 300px ให้หาจุดที่ Density ต่ำสุด
+        if (minPenalty === Infinity) {
+            let minD = 1.0;
+            for (let y = targetY - 100; y < targetY + 100; y++) {
+                const d = getLineDensity(ctx, x, y, w);
+                if (d < minD) { minD = d; bestY = y; }
+            }
+        }
+        return bestY;
+    }
+
+    function getLineDensity(ctx, x, y, w) {
+        if (y < 0 || y >= ctx.canvas.height) return 1.0;
+        const data = ctx.getImageData(x, y, w, 1).data;
+        let dark = 0;
+        for (let i = 0; i < data.length; i += 16) { if (data[i] < 200) dark++; }
+        return dark / (data.length / 4);
+    }
+
+    function getContentRect(ctx, w, h) {
+        const data = ctx.getImageData(0, 0, w, h).data;
+        let minY = h, maxY = 0, minX = w, maxX = 0, found = false;
+        for (let y = 0; y < h; y += 20) {
+            for (let x = 0; x < w; x += 20) {
+                if (data[(y * w + x) * 4] < 225) {
+                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+                    found = true;
+                }
+            }
+        }
+        // เพิ่ม Padding เล็กน้อยเพื่อให้เนื้อหาไม่ติดขอบเกินไป
+        return found ? { x: Math.max(0, minX - 10), y: Math.max(0, minY - 10), w: Math.min(w, (maxX - minX) + 20), h: Math.min(h, (maxY - minY) + 20) } : null;
+    }
+
+    function renderFinalCombined(allPagesContent) {
+        const labelMargin = 40; // ขอบขาวหัวท้ายแต่ละท่อน
         let totalHeight = 0;
+
         allPagesContent.forEach((pageParts, pIndex) => {
-            totalHeight += safeZone; // ขอบขาวบนของแต่ละใบ
-            pageParts.forEach(p => totalHeight += p.height);
-            totalHeight += safeZone; // ขอบขาวล่างของแต่ละใบ
-            if (pIndex < allPagesContent.length - 1) totalHeight += gapBetweenPages;
+            pageParts.forEach(p => totalHeight += p.height + (labelMargin * 2));
+            if (pIndex < allPagesContent.length - 1) totalHeight += 100; // ช่องว่างระหว่างใบ
         });
 
         const maxW = Math.max(...allPagesContent.flat().map(p => p.width));
@@ -131,73 +183,32 @@
         
         let curY = 0;
         allPagesContent.forEach((pageParts, pIndex) => {
-            curY += safeZone; // เริ่มใบใหม่ด้วยพื้นที่ขาว
-            const startOfPageY = curY;
-
-            pageParts.forEach((part, index) => {
+            pageParts.forEach((part) => {
+                curY += labelMargin;
                 ctx.drawImage(part, 0, curY);
-                
-                // วาดเส้นประ "ด้านข้าง" ยาวตลอดท่อน
-                ctx.setLineDash([15, 12]);
-                ctx.strokeStyle = "#444";
-                ctx.lineWidth = 2.5;
-                ctx.beginPath();
-                ctx.moveTo(0, curY + 2); ctx.lineTo(part.width, curY + 2); // เส้นบนท่อน
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(0, curY + part.height - 2); ctx.lineTo(part.width, curY + part.height - 2); // เส้นล่างท่อน
-                ctx.stroke();
+                curY += part.height + labelMargin;
 
-                curY += part.height;
+                // เส้นประจางๆ สำหรับตัด
+                ctx.setLineDash([15, 15]);
+                ctx.strokeStyle = "#eee";
+                ctx.beginPath();
+                ctx.moveTo(0, curY - labelMargin); ctx.lineTo(maxW, curY - labelMargin);
+                ctx.stroke();
             });
-
-            curY += safeZone; // จบใบด้วยพื้นที่ขาว
-            if (pIndex < allPagesContent.length - 1) curY += gapBetweenPages; // เว้นระยะถ้ามีหน้าถัดไป
+            if (pIndex < allPagesContent.length - 1) curY += 100;
         });
 
         previewCanvas.style.display = 'block';
         shareBtn.style.display = 'block';
-        status.innerText = `✅ จัดการรอยต่อและระยะห่างหน้า PDF เรียบร้อยแล้ว`;
-    }
-
-    // --- ฟังก์ชันเสริมคงเดิม ---
-    function findSafeGap(ctx, x, targetY, w) {
-        const range = 150;
-        let bestY = targetY;
-        let maxBlank = 0;
-        for (let y = targetY - range; y < targetY + range; y++) {
-            let count = 0;
-            while (y + count < targetY + range && isClean(ctx, x, y + count, w)) count++;
-            if (count > maxBlank) { maxBlank = count; bestY = y + Math.floor(count / 2); }
-        }
-        return bestY;
-    }
-
-    function isClean(ctx, x, y, w) {
-        if (y < 0 || y >= ctx.canvas.height) return true;
-        const data = ctx.getImageData(x, y, w, 1).data;
-        let dark = 0;
-        for (let i = 0; i < data.length; i += 20) if (data[i] < 225) dark++;
-        return (dark / (data.length / 4)) < 0.01;
-    }
-
-    function getContentRect(ctx, w, h) {
-        const data = ctx.getImageData(0, 0, w, h).data;
-        let minY = h, maxY = 0, minX = w, maxX = 0, found = false;
-        for (let y = 0; y < h; y += 50) {
-            for (let x = 0; x < w; x += 50) {
-                if (data[(y * w + x) * 4] < 200) {
-                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-                    found = true;
-                }
-            }
-        }
-        return found ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : null;
+        status.innerText = `✅ จัดการสัดส่วนแบบสมดุลกึ่งกลางเรียบร้อย`;
     }
 
     shareBtn.onclick = () => {
-        previewCanvas.toBlob(b => navigator.share({ files: [new File([b], 'Label_Perfect_Split.png', {type:'image/png'})] }));
+        previewCanvas.toBlob(b => {
+            const file = new File([b], `Balanced_Label.png`, {type:'image/png'});
+            if (navigator.share) navigator.share({ files: [file] });
+            else { const link = document.createElement('a'); link.href = URL.createObjectURL(b); link.download = file.name; link.click(); }
+        });
     };
 </script>
 </body>
