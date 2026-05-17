@@ -3,14 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Label Splitter - Print Strong Guide</title>
+<title>Label Splitter - Perfect Join Guide</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 
 <style>
-*{
-    box-sizing:border-box;
-}
+*{ box-sizing:border-box; }
 
 body{
     margin:0;
@@ -30,9 +28,7 @@ body{
     margin:auto;
 }
 
-h2{
-    margin-top:0;
-}
+h2{ margin-top:0; }
 
 .hint{
     color:#aaa;
@@ -62,9 +58,7 @@ select{
     margin-top:10px;
 }
 
-#pdf-upload{
-    display:none;
-}
+#pdf-upload{ display:none; }
 
 #status{
     margin-top:15px;
@@ -109,11 +103,9 @@ canvas{
 <body>
 
 <div class="card">
-
     <h2>Label Splitter</h2>
-
     <p class="hint">
-        แบ่งใบปะหน้าอัตโนมัติ / เลี่ยง QR / ภาพคมชัด / เส้นปะเข้มสำหรับปริ้น
+        แบ่งใบปะหน้า / ภาพคมชัด / เส้นประหัว-กลาง-ท้าย สำหรับตัดแล้วประกบตรง
     </p>
 
     <select id="split-num">
@@ -121,19 +113,13 @@ canvas{
         <option value="3">แบ่ง 3 ท่อน</option>
     </select>
 
-    <label class="btn-upload" for="pdf-upload">
-        📂 เลือกไฟล์ PDF
-    </label>
-
+    <label class="btn-upload" for="pdf-upload">📂 เลือกไฟล์ PDF</label>
     <input type="file" id="pdf-upload" accept="application/pdf">
 
     <div id="status">รอไฟล์...</div>
-
 </div>
 
-<button id="share-btn" class="btn-share">
-    📤 ส่งรูปไปปริ้น
-</button>
+<button id="share-btn" class="btn-share">📤 ส่งรูปไปปริ้น</button>
 
 <div id="preview-wrap">
     <canvas id="canvas-preview"></canvas>
@@ -141,7 +127,6 @@ canvas{
 
 <script>
 const pdfjsLib = window["pdfjs-dist/build/pdf"];
-
 pdfjsLib.GlobalWorkerOptions.workerSrc =
 "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js";
 
@@ -152,128 +137,97 @@ const previewCanvas = document.getElementById("canvas-preview");
 const splitSelect = document.getElementById("split-num");
 
 /* =========================
-   ปรับค่าหลัก
+   ตั้งค่าหลัก
 ========================= */
 
-// ความคมชัด
+// ความคมชัด ยิ่งสูงยิ่งชัด แต่ไฟล์ใหญ่ขึ้น
 const PDF_RENDER_SCALE = 6;
 
-// ขอบบนล่างแต่ละท่อน
-const LABEL_TOP_BOTTOM_MARGIN = 90;
+// ระยะขอบก่อนเส้นหัวและหลังเส้นท้าย
+const OUTER_MARGIN = 90;
+
+// ช่องว่างระหว่างท่อน เส้นกลางจะอยู่ตรงกลางช่องนี้
+const BETWEEN_PART_GAP = 90;
 
 // ขอบขาวด้านข้างหลังหมุน
 const SIDE_PADDING_INSIDE_PART = 36;
 
-// ช่องว่างระหว่างหน้า
-const PAGE_GAP = 120;
+// ช่องว่างระหว่าง PDF คนละหน้า
+const PAGE_GAP = 150;
 
-// ระยะค้นหาจุดตัด
+// ระยะค้นหาจุดตัดที่ไม่ทับตัวอักษร/QR
 const SPLIT_SEARCH_LIMIT = 420;
 
+// padding รอบเนื้อหาจาก PDF
+const CONTENT_PAD = 35;
+
 /* =========================
-   เส้นปะสำหรับปริ้น
+   ตั้งค่าเส้นประ
 ========================= */
 
-// เว้นหัวท้ายเส้น
-const TOP_BOTTOM_GUIDE_INSET = 60;
-
-// ความหนาเส้น
+const GUIDE_INSET = 60;
 const GUIDE_LINE_WIDTH = 5;
-
-// สีเส้น
 const GUIDE_COLOR = "rgba(0,0,0,0.95)";
+const GUIDE_DASH = [12, 8];
 
 let lastFile = null;
 
-/* ========================= */
-
 pdfInput.addEventListener("change", async (e)=>{
-
     const file = e.target.files[0];
-
     if(!file) return;
 
     lastFile = file;
-
     await runSplitter(file);
-
 });
 
 splitSelect.addEventListener("change", async ()=>{
-
-    if(lastFile){
-        await runSplitter(lastFile);
-    }
-
+    if(lastFile) await runSplitter(lastFile);
 });
 
 async function runSplitter(file){
-
     try{
-
         previewCanvas.style.display = "none";
         shareBtn.style.display = "none";
-
         statusBox.innerText = "⚖️ กำลังประมวลผล...";
 
-        const numParts = parseInt(splitSelect.value);
-
+        const numParts = parseInt(splitSelect.value, 10);
         const arrayBuffer = await file.arrayBuffer();
 
-        const pdf =
-        await pdfjsLib.getDocument({
-            data:arrayBuffer
-        }).promise;
-
+        const pdf = await pdfjsLib.getDocument({ data:arrayBuffer }).promise;
         const allPagesContent = [];
 
-        for(let i=1;i<=pdf.numPages;i++){
-
-            statusBox.innerText =
-            `📄 กำลังจัดหน้า ${i}/${pdf.numPages}...`;
+        for(let i=1; i<=pdf.numPages; i++){
+            statusBox.innerText = `📄 กำลังจัดหน้า ${i}/${pdf.numPages}...`;
 
             const page = await pdf.getPage(i);
+            const parts = await processPageParts(page, numParts);
 
-            const parts =
-            await processPageParts(page,numParts);
-
-            if(parts){
+            if(parts && parts.length){
                 allPagesContent.push(parts);
             }
+        }
 
+        if(!allPagesContent.length){
+            statusBox.innerText = "❌ ไม่พบเนื้อหาใน PDF";
+            return;
         }
 
         renderFinalCombined(allPagesContent);
 
         previewCanvas.style.display = "block";
         shareBtn.style.display = "block";
-
-        statusBox.innerText =
-        "✅ เสร็จแล้ว พร้อมปริ้น";
-
+        statusBox.innerText = "✅ เสร็จแล้ว พร้อมปริ้น";
     }catch(err){
-
         console.error(err);
-
-        statusBox.innerText =
-        "❌ เกิดข้อผิดพลาด";
-
+        statusBox.innerText = "❌ เกิดข้อผิดพลาด";
     }
-
 }
 
-async function processPageParts(page,numParts){
+async function processPageParts(page, numParts){
+    const viewport = page.getViewport({ scale:PDF_RENDER_SCALE });
 
-    const viewport =
-    page.getViewport({
-        scale:PDF_RENDER_SCALE
-    });
-
-    const canvas =
-    document.createElement("canvas");
-
-    const ctx =
-    canvas.getContext("2d",{
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", {
         willReadFrequently:true,
         alpha:false
     });
@@ -282,37 +236,26 @@ async function processPageParts(page,numParts){
     canvas.height = Math.ceil(viewport.height);
 
     ctx.fillStyle = "white";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     await page.render({
         canvasContext:ctx,
         viewport
     }).promise;
 
-    const rect =
-    getContentRect(
-        ctx,
-        canvas.width,
-        canvas.height
-    );
-
+    const rect = getContentRect(ctx, canvas.width, canvas.height);
     if(!rect) return null;
 
     const topY = rect.y;
     const bottomY = rect.y + rect.h;
-
     const contentH = bottomY - topY;
 
     const splitPoints = [topY];
 
-    for(let j=1;j<numParts;j++){
+    for(let j=1; j<numParts; j++){
+        const targetY = topY + Math.round((contentH / numParts) * j);
 
-        const targetY =
-        topY +
-        Math.round((contentH/numParts)*j);
-
-        const bestY =
-        findBestSplitGap(
+        const bestY = findBestSplitGap(
             ctx,
             rect.x,
             targetY,
@@ -322,50 +265,33 @@ async function processPageParts(page,numParts){
         );
 
         splitPoints.push(bestY);
-
     }
 
     splitPoints.push(bottomY);
-
     splitPoints.sort((a,b)=>a-b);
 
     const parts = [];
 
-    for(let k=0;k<splitPoints.length-1;k++){
-
+    for(let k=0; k<splitPoints.length-1; k++){
         const startY = splitPoints[k];
         const endY = splitPoints[k+1];
 
-        const h = Math.max(1,endY-startY);
+        const h = Math.max(1, endY - startY);
         const w = rect.w;
 
-        const partCanvas =
-        document.createElement("canvas");
-
-        const pCtx =
-        partCanvas.getContext("2d");
+        const partCanvas = document.createElement("canvas");
+        const pCtx = partCanvas.getContext("2d", { alpha:false });
 
         partCanvas.width = h;
-
-        partCanvas.height =
-        w + (SIDE_PADDING_INSIDE_PART*2);
+        partCanvas.height = w + (SIDE_PADDING_INSIDE_PART * 2);
 
         pCtx.fillStyle = "white";
-        pCtx.fillRect(
-            0,
-            0,
-            partCanvas.width,
-            partCanvas.height
-        );
+        pCtx.fillRect(0, 0, partCanvas.width, partCanvas.height);
 
         pCtx.save();
 
-        pCtx.translate(
-            0,
-            w + SIDE_PADDING_INSIDE_PART
-        );
-
-        pCtx.rotate(-Math.PI/2);
+        pCtx.translate(0, w + SIDE_PADDING_INSIDE_PART);
+        pCtx.rotate(-Math.PI / 2);
 
         pCtx.imageSmoothingEnabled = true;
         pCtx.imageSmoothingQuality = "high";
@@ -385,367 +311,227 @@ async function processPageParts(page,numParts){
         pCtx.restore();
 
         parts.push(partCanvas);
-
     }
 
     return parts;
-
 }
 
-function findBestSplitGap(
-    ctx,
-    x,
-    targetY,
-    w,
-    minY,
-    maxY
-){
-
+function findBestSplitGap(ctx, x, targetY, w, minY, maxY){
     let bestY = targetY;
     let bestScore = Infinity;
 
-    const start =
-    Math.max(
-        minY+30,
-        targetY-SPLIT_SEARCH_LIMIT
-    );
+    const start = Math.max(minY + 30, targetY - SPLIT_SEARCH_LIMIT);
+    const end = Math.min(maxY - 30, targetY + SPLIT_SEARCH_LIMIT);
 
-    const end =
-    Math.min(
-        maxY-30,
-        targetY+SPLIT_SEARCH_LIMIT
-    );
+    for(let y=start; y<=end; y+=2){
+        const density = getBandDensity(ctx, x, y, w, 10);
+        const distance = Math.abs(y - targetY);
 
-    for(let y=start;y<=end;y+=2){
+        const score = (density * 12000) + (distance * 1.15);
 
-        const density =
-        getBandDensity(
-            ctx,
-            x,
-            y,
-            w,
-            10
-        );
-
-        const distance =
-        Math.abs(y-targetY);
-
-        const score =
-        (density*12000) +
-        (distance*1.15);
-
-        if(score<bestScore){
-
+        if(score < bestScore){
             bestScore = score;
             bestY = y;
-
         }
-
     }
 
     return bestY;
-
 }
 
-function getBandDensity(
-    ctx,
-    x,
-    centerY,
-    w,
-    bandH
-){
+function getBandDensity(ctx, x, centerY, w, bandH){
+    const y = Math.max(0, Math.floor(centerY - bandH / 2));
+    const h = Math.min(bandH, ctx.canvas.height - y);
 
-    const y =
-    Math.max(
-        0,
-        Math.floor(centerY-bandH/2)
-    );
+    if(h <= 0) return 1;
 
-    const h =
-    Math.min(
-        bandH,
-        ctx.canvas.height-y
-    );
-
-    if(h<=0) return 1;
-
-    const data =
-    ctx.getImageData(x,y,w,h).data;
+    const data = ctx.getImageData(x, y, w, h).data;
 
     let dark = 0;
     let total = 0;
 
-    for(let i=0;i<data.length;i+=16){
-
+    for(let i=0; i<data.length; i+=16){
         const r = data[i];
         const g = data[i+1];
         const b = data[i+2];
+        const avg = (r + g + b) / 3;
 
-        const avg = (r+g+b)/3;
-
-        if(avg<218){
-            dark++;
-        }
-
+        if(avg < 218) dark++;
         total++;
-
     }
 
-    return total ? dark/total : 1;
-
+    return total ? dark / total : 1;
 }
 
-function getContentRect(ctx,w,h){
-
-    const data =
-    ctx.getImageData(0,0,w,h).data;
+function getContentRect(ctx, w, h){
+    const data = ctx.getImageData(0, 0, w, h).data;
 
     let minY = h;
     let maxY = 0;
     let minX = w;
     let maxX = 0;
-
     let found = false;
 
     const step = 5;
 
-    for(let y=0;y<h;y+=step){
-
-        for(let x=0;x<w;x+=step){
-
-            const idx =
-            (y*w+x)*4;
+    for(let y=0; y<h; y+=step){
+        for(let x=0; x<w; x+=step){
+            const idx = (y * w + x) * 4;
 
             const r = data[idx];
             const g = data[idx+1];
             const b = data[idx+2];
+            const avg = (r + g + b) / 3;
 
-            const avg = (r+g+b)/3;
-
-            if(avg<245){
-
-                minY = Math.min(minY,y);
-                maxY = Math.max(maxY,y);
-
-                minX = Math.min(minX,x);
-                maxX = Math.max(maxX,x);
-
+            if(avg < 245){
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
                 found = true;
-
             }
-
         }
-
     }
 
     if(!found) return null;
 
-    const pad = 35;
+    const x = Math.max(0, minX - CONTENT_PAD);
+    const y = Math.max(0, minY - CONTENT_PAD);
+    const right = Math.min(w, maxX + CONTENT_PAD);
+    const bottom = Math.min(h, maxY + CONTENT_PAD);
 
-    const x =
-    Math.max(0,minX-pad);
-
-    const y =
-    Math.max(0,minY-pad);
-
-    const right =
-    Math.min(w,maxX+pad);
-
-    const bottom =
-    Math.min(h,maxY+pad);
-
-    return{
+    return {
         x,
         y,
-        w:Math.max(1,right-x),
-        h:Math.max(1,bottom-y)
+        w:Math.max(1, right - x),
+        h:Math.max(1, bottom - y)
     };
-
 }
 
 function renderFinalCombined(allPagesContent){
+    const flatParts = allPagesContent.flat();
 
-    const flatParts =
-    allPagesContent.flat();
+    const maxW = Math.max(...flatParts.map(p => p.width));
+    const maxPartH = Math.max(...flatParts.map(p => p.height));
 
-    const maxW =
-    Math.max(...flatParts.map(p=>p.width));
+    let totalHeight = OUTER_MARGIN * 2;
 
-    const maxPartH =
-    Math.max(...flatParts.map(p=>p.height));
+    allPagesContent.forEach((pageParts, pageIndex)=>{
+        pageParts.forEach((part, partIndex)=>{
+            totalHeight += maxPartH;
 
-    let totalHeight = 0;
-
-    allPagesContent.forEach((pageParts,pIndex)=>{
-
-        pageParts.forEach(()=>{
-
-            totalHeight +=
-            maxPartH +
-            (LABEL_TOP_BOTTOM_MARGIN*2);
-
+            if(partIndex < pageParts.length - 1){
+                totalHeight += BETWEEN_PART_GAP;
+            }
         });
 
-        if(pIndex<
-        allPagesContent.length-1){
-
+        if(pageIndex < allPagesContent.length - 1){
             totalHeight += PAGE_GAP;
-
         }
-
     });
 
     previewCanvas.width = maxW;
     previewCanvas.height = totalHeight;
 
-    const ctx =
-    previewCanvas.getContext("2d",{
-        alpha:false
-    });
+    const ctx = previewCanvas.getContext("2d", { alpha:false });
 
     ctx.fillStyle = "white";
-
-    ctx.fillRect(
-        0,
-        0,
-        maxW,
-        totalHeight
-    );
+    ctx.fillRect(0, 0, maxW, totalHeight);
 
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    let curY = 0;
+    let curY = OUTER_MARGIN;
 
-    allPagesContent.forEach((pageParts,pageIndex)=>{
+    // เส้นประปิดหัว
+    drawHorizontalDashedLine(
+        ctx,
+        GUIDE_INSET,
+        maxW - GUIDE_INSET,
+        OUTER_MARGIN / 2,
+        GUIDE_COLOR
+    );
 
-        pageParts.forEach((part)=>{
+    allPagesContent.forEach((pageParts, pageIndex)=>{
 
-            const frameTop = curY;
+        pageParts.forEach((part, partIndex)=>{
 
-            const frameHeight =
-            maxPartH +
-            (LABEL_TOP_BOTTOM_MARGIN*2);
+            const partX = Math.round((maxW - part.width) / 2);
+            const partY = curY + Math.round((maxPartH - part.height) / 2);
 
-            const partX =
-            Math.round(
-                (maxW-part.width)/2
-            );
+            ctx.drawImage(part, partX, partY);
 
-            const partY =
-            frameTop +
-            LABEL_TOP_BOTTOM_MARGIN +
-            Math.round(
-                (maxPartH-part.height)/2
-            );
+            curY += maxPartH;
 
-            ctx.drawImage(
-                part,
-                partX,
-                partY
-            );
+            // เส้นประกลาง 1 เส้น ระหว่างท่อน
+            if(partIndex < pageParts.length - 1){
+                const guideY = curY + Math.round(BETWEEN_PART_GAP / 2);
 
-            // เส้นปะบน
-            drawHorizontalDashedLine(
-                ctx,
-                TOP_BOTTOM_GUIDE_INSET,
-                maxW-TOP_BOTTOM_GUIDE_INSET,
-                frameTop+16,
-                GUIDE_COLOR
-            );
+                drawHorizontalDashedLine(
+                    ctx,
+                    GUIDE_INSET,
+                    maxW - GUIDE_INSET,
+                    guideY,
+                    GUIDE_COLOR
+                );
 
-            // เส้นปะล่าง
-            drawHorizontalDashedLine(
-                ctx,
-                TOP_BOTTOM_GUIDE_INSET,
-                maxW-TOP_BOTTOM_GUIDE_INSET,
-                frameTop+frameHeight-16,
-                GUIDE_COLOR
-            );
-
-            curY += frameHeight;
-
+                curY += BETWEEN_PART_GAP;
+            }
         });
 
-        if(pageIndex<
-        allPagesContent.length-1){
-
+        if(pageIndex < allPagesContent.length - 1){
             curY += PAGE_GAP;
-
         }
-
     });
 
+    // เส้นประปิดท้าย
+    drawHorizontalDashedLine(
+        ctx,
+        GUIDE_INSET,
+        maxW - GUIDE_INSET,
+        previewCanvas.height - (OUTER_MARGIN / 2),
+        GUIDE_COLOR
+    );
 }
 
-function drawHorizontalDashedLine(
-    ctx,
-    x1,
-    x2,
-    y,
-    color
-){
-
+function drawHorizontalDashedLine(ctx, x1, x2, y, color){
     ctx.save();
 
-    // เส้นถี่ขึ้น
-    ctx.setLineDash([12,8]);
-
+    ctx.setLineDash(GUIDE_DASH);
     ctx.strokeStyle = color;
-
     ctx.lineWidth = GUIDE_LINE_WIDTH;
+    ctx.lineCap = "round";
 
     ctx.beginPath();
-
-    ctx.moveTo(x1,y);
-    ctx.lineTo(x2,y);
-
+    ctx.moveTo(x1, y);
+    ctx.lineTo(x2, y);
     ctx.stroke();
 
     ctx.restore();
-
 }
 
 shareBtn.onclick = ()=>{
-
     previewCanvas.toBlob((blob)=>{
-
-        const file =
-        new File(
-            [blob],
-            "Label_Splitter_Print.png",
-            {
-                type:"image/png"
-            }
-        );
-
-        if(
-            navigator.canShare &&
-            navigator.canShare({
-                files:[file]
-            })
-        ){
-
-            navigator.share({
-                files:[file]
-            });
-
-        }else{
-
-            const link =
-            document.createElement("a");
-
-            link.href =
-            URL.createObjectURL(blob);
-
-            link.download = file.name;
-
-            link.click();
-
+        if(!blob){
+            statusBox.innerText = "❌ สร้างไฟล์รูปไม่สำเร็จ";
+            return;
         }
 
-    },"image/png");
+        const file = new File(
+            [blob],
+            "Label_Splitter_Perfect_Join.png",
+            { type:"image/png" }
+        );
 
+        if(navigator.canShare && navigator.canShare({ files:[file] })){
+            navigator.share({ files:[file] });
+        }else{
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = file.name;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+    }, "image/png");
 };
 </script>
 
