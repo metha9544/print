@@ -36,65 +36,26 @@ h2{ margin-top:0; }
     line-height:1.5;
 }
 
-select, input[type="url"]{
+select{
     width:100%;
-    padding:14px;
+    padding:15px;
     border-radius:12px;
     background:#333;
     color:white;
     border:1px solid #555;
-    margin:8px 0;
-    font-size:15px;
+    margin:15px 0;
+    font-size:16px;
 }
-
-select:focus, input[type="url"]:focus{
-    outline:none;
-    border-color:#007aff;
-}
-
-.url-box {
-    margin: 15px 0 10px 0;
-}
-
-.btn-url {
-    width: 100%;
-    background: #34c759;
-    color: white;
-    padding: 14px;
-    border: none;
-    border-radius: 12px;
-    font-weight: bold;
-    font-size: 15px;
-    cursor: pointer;
-    margin-top: 5px;
-}
-
-.divider {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    color: #777;
-    margin: 15px 0;
-    font-size: 13px;
-}
-
-.divider::before, .divider::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid #444;
-}
-
-.divider::before { margin-right: .5em; }
-.divider::after { margin-left: .5em; }
 
 .btn-upload{
     display:block;
     background:#007aff;
     color:white;
-    padding:14px;
-    border-radius:12px;
+    padding:18px;
+    border-radius:14px;
     font-weight:bold;
     cursor:pointer;
+    margin-top:10px;
 }
 
 #pdf-upload{ display:none; }
@@ -104,7 +65,6 @@ select:focus, input[type="url"]:focus{
     color:#00ea8c;
     font-weight:bold;
     min-height:24px;
-    word-break: break-word;
 }
 
 #preview-wrap{
@@ -145,7 +105,7 @@ canvas{
 <div class="card">
     <h2>Label Splitter</h2>
     <p class="hint">
-        แบ่งใบปะหน้า / รองรับ ลิงก์, PDF และรูปภาพ / เส้นประหัว-กลาง-ท้าย
+        แบ่งใบปะหน้า / รองรับ PDF และรูปภาพ / เส้นประหัว-กลาง-ท้าย สำหรับตัดแล้วประกบตรง
     </p>
 
     <select id="split-num">
@@ -153,54 +113,8 @@ canvas{
         <option value="3">แบ่ง 3 ท่อน</option>
     </select>
 
-    <!-- ส่วนใส่ URL -->
-    <div class="url-box">
-        <input type="url" id="url-input" placeholder="วางลิงก์ไฟล์ที่นี่ (PDF หรือ รูปภาพ)...">
-        <button id="url-btn" class="btn-url">🔗 โหลดไฟล์จากลิงก์</button>
-    </div>
-
-    <div class="divider">หรือ</div>
-
-    <!-- ส่วนอัปโหลดไฟล์ปกติ -->
-    <label class="btn-upload" for="pdf-upload">
-📂 เลือกไฟล์ PDF หรือ รูปภาพ
-</label>
-
-<input type="file" id="pdf-upload" accept="application/pdf, image/*">
-
-
-<input 
-    id="pdf-url"
-    type="text"
-    placeholder="วางลิงก์ PDF เช่น https://app.iship.cloud/print/pdf?order=42686057"
-    style="
-    width:100%;
-    padding:15px;
-    margin-top:15px;
-    border-radius:12px;
-    background:#333;
-    color:white;
-    border:1px solid #555;
-    font-size:14px;
-    "
->
-
-<button 
-id="load-url-btn"
-style="
-width:100%;
-padding:16px;
-margin-top:10px;
-border-radius:12px;
-border:none;
-background:#34c759;
-color:white;
-font-weight:bold;
-font-size:16px;
-cursor:pointer;
-">
-🌐 โหลด PDF จากลิงก์
-</button>
+    <label class="btn-upload" for="pdf-upload">📂 เลือกไฟล์ PDF หรือ รูปภาพ</label>
+    <input type="file" id="pdf-upload" accept="application/pdf, image/*">
 
     <div id="status">รอไฟล์...</div>
 </div>
@@ -217,16 +131,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js";
 
 const pdfInput = document.getElementById("pdf-upload");
-const urlInput = document.getElementById("url-input");
-const urlBtn = document.getElementById("url-btn");
 const statusBox = document.getElementById("status");
 const shareBtn = document.getElementById("share-btn");
 const previewCanvas = document.getElementById("canvas-preview");
 const splitSelect = document.getElementById("split-num");
-const urlInput = document.getElementById("pdf-url");
-const loadUrlBtn = document.getElementById("load-url-btn");
+
 /* =========================
-   ตั้งค่าหลัก
+   ตั้งค่าหลัก (คงเดิม)
 ========================= */
 const PDF_RENDER_SCALE = 6;
 const OUTER_MARGIN = 90;
@@ -237,69 +148,25 @@ const SPLIT_SEARCH_LIMIT = 420;
 const CONTENT_PAD = 35;
 
 /* =========================
-   ตั้งค่าเส้นประ
+   ตั้งค่าเส้นประ (คงเดิม)
 ========================= */
 const GUIDE_INSET = 60;
 const GUIDE_LINE_WIDTH = 5;
 const GUIDE_COLOR = "rgba(0,0,0,0.95)";
 const GUIDE_DASH = [12, 8];
 
-let lastFileSource = null; // เก็บไฟล์ประเภท File หรือ Blob สำหรับทำใหม่เมื่อเปลี่ยนจำนวนท่อน
+let lastFile = null;
 
-// event เลือกไฟล์จากเครื่อง
 pdfInput.addEventListener("change", async (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    lastFileSource = file;
+    lastFile = file;
     await runSplitter(file);
 });
 
-// event กดปุ่มโหลดลิงก์
-urlBtn.addEventListener("click", async ()=>{
-    const url = urlInput.value.trim();
-    if(!url) {
-        statusBox.innerText = "❌ กรุณากรอกลิงก์ก่อนครับ";
-        return;
-    }
-    await loadFileFromUrl(url);
-});
-
-// event เปลี่ยนการเลือกท่อน
 splitSelect.addEventListener("change", async ()=>{
-    if(lastFileSource) await runSplitter(lastFileSource);
+    if(lastFile) await runSplitter(lastFile);
 });
-
-// ฟังก์ชันสำหรับดึงไฟล์ผ่าน URL
-async function loadFileFromUrl(url) {
-    try {
-        statusBox.innerText = "🌐 กำลังดาวน์โหลดไฟล์จากลิงก์...";
-        
-        // ใช้ CORS Proxy เพื่อแก้ปัญหาการเข้าถึงไฟล์ต่าง Domain
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-        
-        if (!response.ok) throw new Error("ไม่สามารถดึงข้อมูลจากลิงก์ได้");
-        
-        const blob = await response.blob();
-        let mimeType = blob.type;
-
-        // หากตรวจไม่เจอ Mime-Type จาก Proxy ให้ดูจาก URL หรือปรับตามกรณี iShip
-        if (!mimeType || mimeType === "text/html" || mimeType === "application/octet-stream") {
-            if (url.includes("pdf")) {
-                mimeType = "application/pdf";
-            } else {
-                mimeType = "image/png";
-            }
-        }
-
-        const file = new File([blob], "label_from_url", { type: mimeType });
-        lastFileSource = file;
-        await runSplitter(file);
-    } catch (err) {
-        console.error(err);
-        statusBox.innerText = "❌ ดาวน์โหลดไฟล์ไม่สำเร็จ (ตรวจสอบลิงก์อีกครั้ง)";
-    }
-}
 
 // ฟังก์ชันช่วยโหลดรูปภาพ
 function loadImage(file) {
@@ -314,53 +181,7 @@ function loadImage(file) {
         reader.readAsDataURL(file);
     });
 }
-loadUrlBtn.addEventListener("click", async ()=>{
 
-    const url = urlInput.value.trim();
-
-    if(!url){
-        statusBox.innerText="❌ กรุณาใส่ลิงก์ PDF";
-        return;
-    }
-
-    try{
-
-        statusBox.innerText="🌐 กำลังดึงไฟล์ PDF...";
-
-        const response = await fetch(url);
-
-        if(!response.ok){
-            throw new Error("โหลดไฟล์ไม่ได้");
-        }
-
-
-        const blob = await response.blob();
-
-
-        const pdfFile = new File(
-            [blob],
-            "download.pdf",
-            {
-                type:"application/pdf"
-            }
-        );
-
-
-        lastFile = pdfFile;
-
-        await runSplitter(pdfFile);
-
-
-    }catch(err){
-
-        console.error(err);
-
-        statusBox.innerText=
-        "❌ ไม่สามารถดึง PDF จากลิงก์ได้ (อาจติด CORS)";
-
-    }
-
-});
 async function runSplitter(file){
     try{
         previewCanvas.style.display = "none";
@@ -370,7 +191,7 @@ async function runSplitter(file){
         const numParts = parseInt(splitSelect.value, 10);
         const allPagesContent = [];
 
-        if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+        if (file.type === "application/pdf") {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data:arrayBuffer }).promise;
             for(let i=1; i<=pdf.numPages; i++){
@@ -379,7 +200,7 @@ async function runSplitter(file){
                 const parts = await processPageParts(page, numParts, "pdf");
                 if(parts && parts.length) allPagesContent.push(parts);
             }
-        } else {
+        } else if (file.type.startsWith("image/")) {
             statusBox.innerText = `🖼️ กำลังจัดการรูปภาพ...`;
             const imgElement = await loadImage(file);
             const parts = await processPageParts(imgElement, numParts, "image");
@@ -397,7 +218,7 @@ async function runSplitter(file){
         statusBox.innerText = "✅ เสร็จแล้ว พร้อมปริ้น";
     }catch(err){
         console.error(err);
-        statusBox.innerText = "❌ เกิดข้อผิดพลาดในการประมวลผล";
+        statusBox.innerText = "❌ เกิดข้อผิดพลาด";
     }
 }
 
@@ -413,6 +234,7 @@ async function processPageParts(source, numParts, type){
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         await source.render({ canvasContext:ctx, viewport }).promise;
     } else {
+        // สำหรับรูปภาพ
         canvas.width = source.width;
         canvas.height = source.height;
         ctx.fillStyle = "white";
@@ -462,6 +284,7 @@ async function processPageParts(source, numParts, type){
     return parts;
 }
 
+// อัลกอริทึมการคำนวณ (คงเดิมทั้งหมด)
 function findBestSplitGap(ctx, x, targetY, w, minY, maxY){
     let bestY = targetY;
     let bestScore = Infinity;
