@@ -162,8 +162,45 @@ canvas{
     <div class="divider">หรือ</div>
 
     <!-- ส่วนอัปโหลดไฟล์ปกติ -->
-    <label class="btn-upload" for="pdf-upload">📂 เลือกไฟล์จากเครื่อง</label>
-    <input type="file" id="pdf-upload" accept="application/pdf, image/*">
+    <label class="btn-upload" for="pdf-upload">
+📂 เลือกไฟล์ PDF หรือ รูปภาพ
+</label>
+
+<input type="file" id="pdf-upload" accept="application/pdf, image/*">
+
+
+<input 
+    id="pdf-url"
+    type="text"
+    placeholder="วางลิงก์ PDF เช่น https://app.iship.cloud/print/pdf?order=42686057"
+    style="
+    width:100%;
+    padding:15px;
+    margin-top:15px;
+    border-radius:12px;
+    background:#333;
+    color:white;
+    border:1px solid #555;
+    font-size:14px;
+    "
+>
+
+<button 
+id="load-url-btn"
+style="
+width:100%;
+padding:16px;
+margin-top:10px;
+border-radius:12px;
+border:none;
+background:#34c759;
+color:white;
+font-weight:bold;
+font-size:16px;
+cursor:pointer;
+">
+🌐 โหลด PDF จากลิงก์
+</button>
 
     <div id="status">รอไฟล์...</div>
 </div>
@@ -186,7 +223,8 @@ const statusBox = document.getElementById("status");
 const shareBtn = document.getElementById("share-btn");
 const previewCanvas = document.getElementById("canvas-preview");
 const splitSelect = document.getElementById("split-num");
-
+const urlInput = document.getElementById("pdf-url");
+const loadUrlBtn = document.getElementById("load-url-btn");
 /* =========================
    ตั้งค่าหลัก
 ========================= */
@@ -276,7 +314,53 @@ function loadImage(file) {
         reader.readAsDataURL(file);
     });
 }
+loadUrlBtn.addEventListener("click", async ()=>{
 
+    const url = urlInput.value.trim();
+
+    if(!url){
+        statusBox.innerText="❌ กรุณาใส่ลิงก์ PDF";
+        return;
+    }
+
+    try{
+
+        statusBox.innerText="🌐 กำลังดึงไฟล์ PDF...";
+
+        const response = await fetch(url);
+
+        if(!response.ok){
+            throw new Error("โหลดไฟล์ไม่ได้");
+        }
+
+
+        const blob = await response.blob();
+
+
+        const pdfFile = new File(
+            [blob],
+            "download.pdf",
+            {
+                type:"application/pdf"
+            }
+        );
+
+
+        lastFile = pdfFile;
+
+        await runSplitter(pdfFile);
+
+
+    }catch(err){
+
+        console.error(err);
+
+        statusBox.innerText=
+        "❌ ไม่สามารถดึง PDF จากลิงก์ได้ (อาจติด CORS)";
+
+    }
+
+});
 async function runSplitter(file){
     try{
         previewCanvas.style.display = "none";
